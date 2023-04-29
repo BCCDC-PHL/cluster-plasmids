@@ -1,0 +1,9 @@
+name: cluster-plasmids
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3
+  - mash=2.3
+  - mafft=7.520
