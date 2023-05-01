@@ -35,6 +35,8 @@ process sketch_plasmid_db {
 process create_mash_distance_matrix {
 
     executor 'local'
+    
+    publishDir "${params.outdir}", pattern: "mash_distance_matrix.csv", mode: "copy"
 
     input:
     tuple path(plasmid_db_sketch), path(plasmids)
@@ -52,11 +54,10 @@ process create_mash_distance_matrix {
 }
 
 
-
-
 process find_similar_plasmids {
+
     executor 'local'
-    
+
     input:
     path(mash_distance_matrix)
 
@@ -92,24 +93,47 @@ process remove_duplicates {
 }
 
 
-
-
-
-process mafft {
+process pairwise_align {
 
     tag { plasmid_id_1 + ' / ' + plasmid_id_2 }
 
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_1}", pattern: "*.aln.fa", mode: "copy"
+
     input:
-    tuple val(plasmid_id_1), val(plasmid_id_2),  path(input)
+    tuple val(plasmid_id_1), val(plasmid_id_2), path(all_plasmids)
 
     output:
     tuple val(plasmid_id_1), val(plasmid_id_2),  path("${plasmid_id_1}_vs_${plasmid_id_2}.aln.fa")
     
     script:
     """
+    extract_plasmid_by_id.py --id ${plasmid_id_1} ${all_plasmids} -o . 
+    extract_plasmid_by_id.py --id ${plasmid_id_2} ${all_plasmids} -o .
+    cat ${plasmid_id_1}.fa ${plasmid_id_2}.fa > plasmids_to_align.fa
+
     mafft \
       --auto \
       --thread ${task.cpus} \
-      --input ${input} > ${plasmid_id_1}_vs_${plasmid_id_2}.aln.fa
+      plasmids_to_align.fa > ${plasmid_id_1}_vs_${plasmid_id_2}.aln.fa
+    """
+}
+
+process evaluate_pairwise_alignment {
+
+    tag { plasmid_id_1 + ' / ' + plasmid_id_2 }
+
+    executor 'local'
+
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_1}", pattern: "*_alignment_metrics.csv", mode: "copy"
+    
+    input:
+    tuple val(plasmid_id_1), val(plasmid_id_2), path(alignment)
+
+    output:
+    path("${plasmid_id_1}_vs_${plasmid_id_2}_alignment_metrics.csv")
+    
+    script:
+    """
+    evaluate_pairwise_alignment.py ${alignment} > ${plasmid_id_1}_vs_${plasmid_id_2}_alignment_metrics.csv
     """
 }
