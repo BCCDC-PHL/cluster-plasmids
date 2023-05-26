@@ -7,3 +7,5 @@ dependencies:
   - python=3
   - mash=2.3
   - mafft=7.520
+  - abricate=1.0.1
+  - emboss=6.6.0

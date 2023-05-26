@@ -1,22 +1,67 @@
 process extract_individual_plasmids {
+
     executor 'local'
-    
+
+    publishDir "${params.outdir}", pattern: "individual_plasmids", mode: "copy"
+
     input:
     path(plasmid_db)
 
     output:
-    path("plasmids")
+    path("individual_plasmids")
     
     script:
     """
     extract_individual_plasmids.py \
       ${plasmid_db} \
-      -o plasmids
+      -o individual_plasmids
     """
 }
 
 
+process identify_resistance_genes {
+
+    publishDir "${params.outdir}", pattern: "plasmid_resistance_genes.tsv", mode: "copy"
+
+    input:
+    path(plasmid_db)
+
+    output:
+    path("plasmid_resistance_genes.tsv")
+
+    script:
+    """
+    abricate \
+      --db ncbi \
+      ${plasmid_db} \
+      > plasmid_resistance_genes.tsv
+    """
+}
+
+
+process identify_replicons {
+
+    publishDir "${params.outdir}", pattern: "plasmid_replicons.tsv", mode: "copy"
+
+    input:
+    path(plasmid_db)
+
+    output:
+    path("plasmid_replicons.tsv")
+
+    script:
+    """
+    abricate \
+      --db plasmidfinder \
+      ${plasmid_db} \
+      > plasmid_replicons.tsv
+    """
+}
+
+
+
 process sketch_plasmid_db {
+
     input:
     path(plasmid_db)
 
@@ -75,8 +120,8 @@ process find_similar_plasmids {
     """
 }
 
-
 process remove_duplicates {
+
     executor 'local'
     
     input:
@@ -92,24 +137,47 @@ process remove_duplicates {
     """
 }
 
+process extract_plasmid_pair {
+
+    executor 'local'
+
+    tag { plasmid_id_1 + ' / ' + plasmid_id_2 }
+
+    input:
+    tuple val(plasmid_id_1), val(plasmid_id_2), path(all_plasmids)
+
+    output:
+    tuple val(plasmid_id_1), val(plasmid_id_2),  path("${plasmid_id_1}.fa"), path("${plasmid_id_2}.fa")
+    
+    script:
+    """
+    extract_plasmid_by_id.py --id ${plasmid_id_1} ${all_plasmids} -o .
+    extract_plasmid_by_id.py --id ${plasmid_id_2} ${all_plasmids} -o .
+    """
+}
+
 
 process pairwise_align {
 
     tag { plasmid_id_1 + ' / ' + plasmid_id_2 }
 
     publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_1}", pattern: "*.aln.fa", mode: "copy"
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_2}", pattern: "*.aln.fa", mode: "copy"
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_1}", pattern: "{plasmid_id_1}.fa", mode: "copy"
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_1}", pattern: "{plasmid_id_2}.fa", mode: "copy"
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_2}", pattern: "{plasmid_id_1}.fa", mode: "copy"
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_2}", pattern: "{plasmid_id_2}.fa", mode: "copy"
+
 
     input:
-    tuple val(plasmid_id_1), val(plasmid_id_2), path(all_plasmids)
+    tuple val(plasmid_id_1), val(plasmid_id_2), path(plasmid_1), path(plasmid_2)
 
     output:
     tuple val(plasmid_id_1), val(plasmid_id_2),  path("${plasmid_id_1}_vs_${plasmid_id_2}.aln.fa")
     
     script:
     """
-    extract_plasmid_by_id.py --id ${plasmid_id_1} ${all_plasmids} -o . 
-    extract_plasmid_by_id.py --id ${plasmid_id_2} ${all_plasmids} -o .
-    cat ${plasmid_id_1}.fa ${plasmid_id_2}.fa > plasmids_to_align.fa
+    cat ${plasmid_1} ${plasmid_2} > plasmids_to_align.fa
 
     mafft \
       --auto \
@@ -118,11 +186,49 @@ process pairwise_align {
     """
 }
 
-process evaluate_pairwise_alignment {
+process dotpath {
 
     tag { plasmid_id_1 + ' / ' + plasmid_id_2 }
 
-    executor 'local'
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_1}", pattern: "${plasmid_id_1}_vs_${plasmid_id_2}_dotpath.png", mode: "copy"
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_2}", pattern: "${plasmid_id_1}_vs_${plasmid_id_2}_dotpath.png", mode: "copy"
+
+    input:
+    tuple val(plasmid_id_1), val(plasmid_id_2), path(plasmid_1), path(plasmid_2)
+
+    output:
+    tuple val(plasmid_id_1), val(plasmid_id_2),  path("${plasmid_id_1}_vs_${plasmid_id_2}_dotpath.png")
+    
+    script:
+    """
+    dotpath ${plasmid_1} ${plasmid_2} -word ${params.dotpath_wordsize} -graph png -gtitle "${plasmid_id_1} Vs. ${plasmid_id_2}"
+    mv dotpath.1.png ${plasmid_id_1}_vs_${plasmid_id_2}_dotpath.png
+    """
+}
+
+process dotmatcher {
+
+    tag { plasmid_id_1 + ' / ' + plasmid_id_2 }
+
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_1}", pattern: "${plasmid_id_1}_vs_${plasmid_id_2}_dotmatcher.png", mode: "copy"
+    publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_2}", pattern: "${plasmid_id_1}_vs_${plasmid_id_2}_dotmatcher.png", mode: "copy"
+
+    input:
+    tuple val(plasmid_id_1), val(plasmid_id_2), path(plasmid_1), path(plasmid_2)
+
+    output:
+    tuple val(plasmid_id_1), val(plasmid_id_2),  path("${plasmid_id_1}_vs_${plasmid_id_2}_dotmatcher.png")
+    
+    script:
+    """
+    dotmatcher ${plasmid_1} ${plasmid_2} -windowsize ${params.dotmatcher_windowsize} -graph png -gtitle "${plasmid_id_1} Vs. ${plasmid_id_2}"
+    mv dotmatcher.1.png ${plasmid_id_1}_vs_${plasmid_id_2}_dotmatcher.png
+    """
+}
+
+process evaluate_pairwise_alignment {
+
+    tag { plasmid_id_1 + ' / ' + plasmid_id_2 }
 
     publishDir "${params.outdir}/pairwise_alignments/${plasmid_id_1}", pattern: "*_alignment_metrics.csv", mode: "copy"
     
@@ -137,3 +243,4 @@ process evaluate_pairwise_alignment {
     evaluate_pairwise_alignment.py ${alignment} > ${plasmid_id_1}_vs_${plasmid_id_2}_alignment_metrics.csv
     """
 }
+
