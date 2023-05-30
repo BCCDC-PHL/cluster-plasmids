@@ -5,6 +5,7 @@ nextflow.enable.dsl = 2
 include { identify_resistance_genes }   from './modules/cluster_plasmids.nf'
 include { identify_replicons }          from './modules/cluster_plasmids.nf'
 include { extract_individual_plasmids } from './modules/cluster_plasmids.nf'
+include { bakta }                       from './modules/cluster_plasmids.nf'
 include { sketch_plasmid_db }           from './modules/cluster_plasmids.nf'
 include { create_mash_distance_matrix } from './modules/cluster_plasmids.nf'
 include { find_similar_plasmids }       from './modules/cluster_plasmids.nf'
@@ -17,13 +18,15 @@ include { evaluate_pairwise_alignment } from './modules/cluster_plasmids.nf'
 
 workflow {
   ch_db = Channel.fromPath(params.db)
+  ch_bakta_db = Channel.fromPath(params.bakta_db)
 
   main:
     identify_resistance_genes(ch_db)
     identify_replicons(ch_db)
     extract_individual_plasmids(ch_db)
+    bakta(extract_individual_plasmids.out.files.flatten().combine(ch_bakta_db))
     sketch_plasmid_db(ch_db)
-    create_mash_distance_matrix(sketch_plasmid_db.out.combine(extract_individual_plasmids.out))
+    create_mash_distance_matrix(sketch_plasmid_db.out.combine(extract_individual_plasmids.out.dir))
     find_similar_plasmids(create_mash_distance_matrix.out)
     remove_duplicates(find_similar_plasmids.out)
     extract_plasmid_pair(remove_duplicates.out.splitCsv().map{ it -> [it[0], it[1]] }.combine(ch_db))

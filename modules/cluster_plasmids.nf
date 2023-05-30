@@ -8,7 +8,8 @@ process extract_individual_plasmids {
     path(plasmid_db)
 
     output:
-    path("individual_plasmids")
+    path("individual_plasmids"), emit: dir
+    path("individual_plasmids/*"), emit: files
     
     script:
     """
@@ -55,6 +56,30 @@ process identify_replicons {
       --db plasmidfinder \
       ${plasmid_db} \
       > plasmid_replicons.tsv
+    """
+}
+
+
+process bakta {
+
+    input:
+    tuple path(plasmid), path(bakta_db)
+
+    output:
+    path("bakta_out/")
+
+    script:
+    """
+    mkdir ./tmp
+
+    bakta \
+      --threads ${task.cpus} \
+      --db ${bakta_db} \
+      --tmp-dir ./tmp \
+      -o bakta_out \
+      --prefix \$(basename ${plasmid} .fa) \
+      --skip-crispr \
+      ${plasmid}
     """
 }
 
