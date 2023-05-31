@@ -62,13 +62,19 @@ process identify_replicons {
 
 process bakta {
 
+    tag { plasmid_id }
+
+    publishDir "${params.outdir}/individual_plasmids", pattern: "bakta_out/*.gff3", mode: "copy", saveAs: { it.split('/')[1] }
+
     input:
     tuple path(plasmid), path(bakta_db)
 
     output:
-    path("bakta_out/")
+    tuple val(plasmid_id), path("bakta_out/*.gff3")
+
 
     script:
+    plasmid_id = plasmid.getName().split("\\.")[0]
     """
     mkdir ./tmp
 
@@ -77,9 +83,11 @@ process bakta {
       --db ${bakta_db} \
       --tmp-dir ./tmp \
       -o bakta_out \
-      --prefix \$(basename ${plasmid} .fa) \
+      --prefix ${plasmid_id} \
       --skip-crispr \
       ${plasmid}
+
+    sed -i 's/contig_1/${plasmid_id}/g' bakta_out/${plasmid_id}.gff3
     """
 }
 
