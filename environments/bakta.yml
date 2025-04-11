@@ -1,6 +1,6 @@
-name: bakta
+name: cluster-plasmids-bakta
 channels:
   - conda-forge
   - bioconda
 dependencies:
-  - bakta=1.7.0
+  - bakta=1.11.0
